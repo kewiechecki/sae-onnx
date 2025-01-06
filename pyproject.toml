@@ -15,6 +15,7 @@ dependencies = [
     "einops",
     "huggingface-hub",
     "natsort",  # For sorting module names
+    "onnx",
     "safetensors",
     "simple-parsing",
     "torch",
