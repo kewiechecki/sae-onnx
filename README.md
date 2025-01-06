@@ -1,3 +1,29 @@
+Modified version to allow SAEs to be exported to [ONNX](https://github.com/onnx/onnx) format, allowing improved interoperability.
+
+## Usage
+Deserializing the model has a larger memory footprint than inference, so this code will OOM on smaller gpus.
+```python
+import torch
+import onnx
+from sae import Sae
+
+d_in = 4096
+sae = Sae.load_from_hub("EleutherAI/sae-llama-3-8b-32x", hookpoint="layers.10")
+sae.cuda()
+
+torch_input = torch.randn(1, d_in).cuda()
+
+torch.onnx.export(
+    sae,
+    (torch_input,),
+    "sae.onnx",
+    export_params=True,
+    input_names=["input"],
+    output_names=["sae_out"],
+    forward_method="forward_onnx"
+)
+```
+
 ## Introduction
 This library trains _k_-sparse autoencoders (SAEs) on the residual stream activations of HuggingFace language models, roughly following the recipe detailed in [Scaling and evaluating sparse autoencoders](https://arxiv.org/abs/2406.04093v1) (Gao et al. 2024).
 
