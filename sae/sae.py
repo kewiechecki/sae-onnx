@@ -195,8 +195,9 @@ class Sae(nn.Module):
 
         #y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.transpose(0,1))
         #return y + self.b_dec
-        top_acts.to(self.dtype)
-        decode(f_dec, self.W_dec, self.b_dec, top_indices, top_acts.to(self.dtype))
+        top_acts = top_acts.to(self.dtype)
+        top_indices = top_indices.to(torch.int32)  # Enforce integer type
+        return decode(f_dec, self.W_dec, self.b_dec, top_indices, top_acts)
 
     def forward_generic(
             self, f_dec, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
