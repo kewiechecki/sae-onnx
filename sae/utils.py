@@ -61,6 +61,9 @@ def resolve_widths(
 
 # Fallback implementation of SAE decoder
 def eager_decode(top_indices: Tensor, top_acts: Tensor, W_dec: Tensor):
+    #assert top_indices.dtype == torch.int64, "top_indices must be int64 for eager_decode"
+    top_indices = top_indices.to(torch.int64)  # Cast to int32 for Triton
+
     buf = top_acts.new_zeros(top_acts.shape[:-1] + (W_dec.shape[-1],))
     acts = buf.scatter_(dim=-1, index=top_indices, src=top_acts)
     return acts @ W_dec.transpose(0,1)
@@ -68,6 +71,7 @@ def eager_decode(top_indices: Tensor, top_acts: Tensor, W_dec: Tensor):
 
 # Triton implementation of SAE decoder
 def triton_decode(top_indices: Tensor, top_acts: Tensor, W_dec: Tensor):
+    top_indices = top_indices.to(torch.int32)  # Cast to int32 for Triton
     return TritonDecoder.apply(top_indices, top_acts, W_dec)
 
 
