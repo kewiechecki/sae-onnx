@@ -4,25 +4,25 @@ Modified version to allow SAEs to be exported to [ONNX](https://github.com/onnx/
 As of PyTorch 2.5.1, `torch.onnx.export()` does not properly handle large models ([Bug 140937](https://github.com/pytorch/pytorch/issues/140937)).
 [This branch](https://github.com/titaiwangms/pytorch) addresses the issue.
 ```python
-import torch
+import os
 import onnx
 from sae import Sae
 
-d_in = 4096
 sae = Sae.load_from_hub("EleutherAI/sae-llama-3-8b-32x", hookpoint="layers.10")
-sae.cuda()
 
-torch_input = torch.randn(1, d_in).cuda()
+# Specify the output directory and file name
+output_dir = "./onnx_model"
+model_path = "./onnx_model/sae.onnx"
 
-torch.onnx.export(
-    sae,
-    (torch_input,),
-    "sae.onnx",
-    export_params=True,
-    input_names=["input"],
-    output_names=["sae_out"],
-    forward_method="forward_onnx"
-)
+sae.export(output_dir)
+
+try:
+    onnx.checker.check_model(model_path)
+    print("The ONNX model is valid!")
+except onnx.checker.ValidationError as e:
+    print(f"The ONNX model is invalid: {e}")
+except Exception as e:
+    print(f"An error occurred: {e}")
 ```
 
 ## Introduction
