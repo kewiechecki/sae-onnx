@@ -12,7 +12,7 @@ from torch import Tensor, nn
 
 from .config import SaeConfig
 from .utils import decoder_impl, eager_decode, decode
-
+from .onnxwrapper import SaeONNXWrapper
 
 class EncoderOutput(NamedTuple):
     top_acts: Tensor
@@ -268,13 +268,14 @@ class Sae(nn.Module):
     ) -> ForwardOutput:
         # Use existing forward 
         return self.forward_generic(decoder_impl, x, y, dead_mask=dead_mask)  
+
     def forward_onnx(self, x: torch.Tensor) -> torch.Tensor:
         # Use existing forward with no extra arguments:
-        out = self.forward_generic(eager_decode, x)  
-
+        with torch.no_grad():
+            out = self.forward_generic(eager_decode, x)  
         # or self.forward(x, y=None, dead_mask=None)
         # Return only the main output if you want a single ONNX output.
-        return out.sae_out
+            return out.sae_out
 
     @torch.no_grad()
     def set_decoder_norm_to_unit_norm(self):
@@ -299,3 +300,9 @@ class Sae(nn.Module):
             self.W_dec.data,
             "d_sae, d_sae d_in -> d_sae d_in",
         )
+
+    def export(self, outdir):
+        self.cpu()
+        wrapper = SaeONNXWrapper(self)
+        wrapper.export(outdir)
+

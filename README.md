@@ -1,7 +1,8 @@
 Modified version to allow SAEs to be exported to [ONNX](https://github.com/onnx/onnx) format, allowing improved interoperability.
 
 ## Usage
-Deserializing the model has a larger memory footprint than inference, so this code will OOM on smaller gpus.
+As of PyTorch 2.5.1, `torch.onnx.export()` does not properly handle large models ([Bug 140937](https://github.com/pytorch/pytorch/issues/140937)).
+[This branch](https://github.com/titaiwangms/pytorch) addresses the issue.
 ```python
 import torch
 import onnx

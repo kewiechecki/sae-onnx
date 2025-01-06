@@ -3,13 +3,22 @@
 \#*\#
 .\#*
 
-# Output files
+# ONNX output
+*.onnx
+*.bias
+*.weight
+*.W_dec
+*.b_dec
+
+# Other output
 *.pdf
 *.csv
 *.tsv
-*.jld2
 *.txt
 *.zip
+*.jld2
+
+# Temporary files
 tmp/*
 
 # Byte-compiled / optimized / DLL files
