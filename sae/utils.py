@@ -1,5 +1,5 @@
 import os
-from typing import Any, Type, TypeVar, cast
+from typing import Any, Type, TypeVar, Callable, cast
 
 import torch
 from accelerate.utils import send_to_device
@@ -82,3 +82,11 @@ else:
         decoder_impl = eager_decode
     else:
         decoder_impl = triton_decode
+
+def decode(f_dec: Callable[[Tensor, Tensor, Tensor, Tensor], Tensor],
+           W: Tensor, b: Tensor, top_acts: Tensor, top_indices: Tensor
+           ) -> Tensor:
+    assert W is not None, "Decoder weight was not initialized."
+
+    y = f_dec(top_indices, top_acts, W.transpose(0,1))
+    return y + b

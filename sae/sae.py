@@ -1,7 +1,7 @@
 import json
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Callable
 
 import einops
 import torch
@@ -11,7 +11,7 @@ from safetensors.torch import load_model, save_model
 from torch import Tensor, nn
 
 from .config import SaeConfig
-from .utils import decoder_impl, eager_decode
+from .utils import decoder_impl, eager_decode, decode
 
 
 class EncoderOutput(NamedTuple):
@@ -188,14 +188,18 @@ class Sae(nn.Module):
         """Encode the input and select the top-k latents."""
         return self.select_topk(self.pre_acts(x))
 
-    def decode(self, top_acts: Tensor, top_indices: Tensor) -> Tensor:
+    def decode(self,
+               f_dec: Callable[[Tensor, Tensor, Tensor, Tensor], Tensor],
+               top_acts: Tensor, top_indices: Tensor) -> Tensor:
         assert self.W_dec is not None, "Decoder weight was not initialized."
 
-        y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.transpose(0,1))
-        return y + self.b_dec
+        #y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.transpose(0,1))
+        #return y + self.b_dec
+        top_acts.to(self.dtype)
+        decode(f_dec, self.W_dec, self.b_dec, top_indices, top_acts.to(self.dtype))
 
     def forward_generic(
-            self, f_decode, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
+            self, f_dec, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
     ) -> ForwardOutput:
         pre_acts = self.pre_acts(x)
 
@@ -205,7 +209,7 @@ class Sae(nn.Module):
 
         # Decode
         top_acts, top_indices = self.select_topk(pre_acts)
-        sae_out = f_decode(self, top_acts, top_indices)
+        sae_out = self.decode(f_dec, top_acts, top_indices)
         if self.W_skip is not None:
             sae_out += x.to(self.dtype) @ self.W_skip.transpose(0,1)
 
@@ -232,7 +236,7 @@ class Sae(nn.Module):
 
             # Encourage the top ~50% of dead latents to predict the residual of the
             # top k living latents
-            e_hat = f_decode(self, auxk_acts, auxk_indices)
+            e_hat = self.decode(f_dec, auxk_acts, auxk_indices)
             auxk_loss = (e_hat - e).pow(2).sum()
             auxk_loss = scale * auxk_loss / total_variance
         else:
@@ -262,12 +266,10 @@ class Sae(nn.Module):
             self, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
     ) -> ForwardOutput:
         # Use existing forward 
-        return self.forward_generic(self.decode, x, y, dead_mask=dead_mask)  
-
-
+        return self.forward_generic(decoder_impl, x, y, dead_mask=dead_mask)  
     def forward_onnx(self, x: torch.Tensor) -> torch.Tensor:
         # Use existing forward with no extra arguments:
-        out = self.forward_generic(x,eager_decode)  
+        out = self.forward_generic(eager_decode, x)  
 
         # or self.forward(x, y=None, dead_mask=None)
         # Return only the main output if you want a single ONNX output.
