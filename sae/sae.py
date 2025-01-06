@@ -11,7 +11,7 @@ from safetensors.torch import load_model, save_model
 from torch import Tensor, nn
 
 from .config import SaeConfig
-from .utils import decoder_impl
+from .utils import decoder_impl, eager_decode
 
 
 class EncoderOutput(NamedTuple):
@@ -191,11 +191,11 @@ class Sae(nn.Module):
     def decode(self, top_acts: Tensor, top_indices: Tensor) -> Tensor:
         assert self.W_dec is not None, "Decoder weight was not initialized."
 
-        y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.mT)
+        y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.transpose(0,1))
         return y + self.b_dec
 
-    def forward(
-        self, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
+    def forward_generic(
+            self, f_decode, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
     ) -> ForwardOutput:
         pre_acts = self.pre_acts(x)
 
@@ -205,9 +205,9 @@ class Sae(nn.Module):
 
         # Decode
         top_acts, top_indices = self.select_topk(pre_acts)
-        sae_out = self.decode(top_acts, top_indices)
+        sae_out = f_decode(self, top_acts, top_indices)
         if self.W_skip is not None:
-            sae_out += x.to(self.dtype) @ self.W_skip.mT
+            sae_out += x.to(self.dtype) @ self.W_skip.transpose(0,1)
 
         # Compute the residual
         e = sae_out - y
@@ -232,7 +232,7 @@ class Sae(nn.Module):
 
             # Encourage the top ~50% of dead latents to predict the residual of the
             # top k living latents
-            e_hat = self.decode(auxk_acts, auxk_indices)
+            e_hat = f_decode(self, auxk_acts, auxk_indices)
             auxk_loss = (e_hat - e).pow(2).sum()
             auxk_loss = scale * auxk_loss / total_variance
         else:
@@ -243,7 +243,7 @@ class Sae(nn.Module):
 
         if self.cfg.multi_topk:
             top_acts, top_indices = pre_acts.topk(4 * self.cfg.k, sorted=False)
-            sae_out = self.decode(top_acts, top_indices)
+            sae_out = f_decode(self, top_acts, top_indices)
 
             multi_topk_fvu = (sae_out - y).pow(2).sum() / total_variance
         else:
@@ -257,6 +257,21 @@ class Sae(nn.Module):
             auxk_loss,
             multi_topk_fvu,
         )
+
+    def forward(
+            self, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
+    ) -> ForwardOutput:
+        # Use existing forward 
+        return self.forward_generic(self.decode, x, y, dead_mask=dead_mask)  
+
+
+    def forward_onnx(self, x: torch.Tensor) -> torch.Tensor:
+        # Use existing forward with no extra arguments:
+        out = self.forward_generic(x,eager_decode)  
+
+        # or self.forward(x, y=None, dead_mask=None)
+        # Return only the main output if you want a single ONNX output.
+        return out.sae_out
 
     @torch.no_grad()
     def set_decoder_norm_to_unit_norm(self):

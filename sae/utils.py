@@ -63,7 +63,7 @@ def resolve_widths(
 def eager_decode(top_indices: Tensor, top_acts: Tensor, W_dec: Tensor):
     buf = top_acts.new_zeros(top_acts.shape[:-1] + (W_dec.shape[-1],))
     acts = buf.scatter_(dim=-1, index=top_indices, src=top_acts)
-    return acts @ W_dec.mT
+    return acts @ W_dec.transpose(0,1)
 
 
 # Triton implementation of SAE decoder
